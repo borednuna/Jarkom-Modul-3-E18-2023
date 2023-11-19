@@ -1,24 +1,6 @@
-# Jarkom-Modul-3-E18-2023
-
-Anggota Kelompok ''E18'' 
-| Nama                      | NRP        |
-|---------------------------|------------|
-| Hanun Shaka Puspa         | 5025211051 |
-| Cholid Junoto             | 5025201038 |
-
-## Soal 1
-## Soal 2
-## Soal 3
-## Soal 4
-## Soal 5
-## Soal 6
-Pada Eisen sebagai load balancer, dipanggil command berikut untuk menginstall packages yang diperlukan
-```
 apt-get update
 apt-get install nginx bind9 php7.3 php7.3-fpm apache2-utils -y
-```
-Lalu dilakukan setup untuk server yang memiliki subdomain Lawine, Linie, dan Lugner
-```
+
 echo 'zone "granz.channel.e18.com" {
         type master;
         file "/etc/bind/jarkom/granz.channel.e18.com";
@@ -66,15 +48,8 @@ $TTL    604800
 ' > /etc/bind/jarkom/3.215.192.in-addr.arpa
 
 service bind9 restart
-```
-Kemudian pada masing-masing worker Lawine, Linie, dan Lugner, serta Load Balancer Eisen dilakukan hal-hal berikut.
-Pertama, persiapkan packages yang dibutuhkan.
-```
-apt-get update
-apt-get install nginx php7.3 php7.3-fpm htop -y
-```
-Diinstall juga pip gdown untuk mendownload file website, lalu unzip file website-nya dan dipindahkan ke `/var/www/html`
-```
+
+## To setup web page
 apt install python3 python3-pip -y
 pip3 install gdown
 
@@ -85,9 +60,7 @@ unzip granz.channel.yyy.com.zip
 rm granz.channel.yyy.com.zip
 
 cp -r /modul-3/* /var/www/html
-```
-Lalu dilakukan setup untuk server nginx. Disini website yang telah didownload dianggap sebagai default website nginx.
-```
+
 echo 'server {
     listen 80 default_server;
     listen [::]:80 default_server;
@@ -110,17 +83,19 @@ echo 'server {
     }
 }
 ' > /etc/nginx/sites-available/default
-```
-Lalu restart service nginx dan php.
-```
+
 service nginx restart
+
+# pastikan listen ke socket php
+# nano /etc/php/7.3/fpm/pool.d/www.conf
+
+# bagian ini
+# listen = /var/run/php/php7.3-fpm.sock
+
 service php7.3-fpm start -v
 service php7.3-fpm restart -v
-```
 
-## Soal 7
-Karena telah diberikan spesifikasi hardware untuk tiap server worker, maka load balancing dapat dilakukan dengan weighted round robin. Pada LB Eisen, dispesifikasikan IP tiap workernya dan juga weight untuk tiap workernya. Karena Lawine memiliki spesifikasi paling tinggi, maka diberikan weight paling berat. Sebaliknya Lugner diberikan weight paling ringan karena memiliki spesifikasi paling rendah.
-```
+# load balance no 7
 echo '#Default menggunakan Round Robin
 upstream backend  {
     server 192.215.4.4 weight=4; #IP Lawine
@@ -146,10 +121,9 @@ server {
 ' > /etc/nginx/sites-available/default
 
 service nginx restart
-```
-## Soal 8
-Untuk setiap kali percobaan algoritma load balancing, dilakukan setup berikut pada LB Eisen, menggunakan unweughted round robin konfigurasinya adalah sebagai berikut.
-```
+
+# load balance no 8
+# unweighted round robin
 echo '#Default menggunakan Round Robin
 upstream backend  {
     server 192.215.4.4; #IP Lawine
@@ -175,69 +149,39 @@ server {
 ' > /etc/nginx/sites-available/default
 
 service nginx restart
-```
-Kemudian, pada client Sein atau Stark, dipanggil command berikut.
-```
-echo 'nameserver 192.168.122.1' > /etc/resolv.conf
 
-apt-get update
-apt-get install dnsutils lynx apache2-utils vsftpd -y
-
-echo 'nameserver 192.215.3.3
-nameserver 8.8.8.8' > /etc/resolv.conf
-```
-Nameserver setelah menginstall packages dialihkan ke IP Eisen supaya dapat mengakses load balancer. Kemudian untuk melakukan benchmarking 100 request dengan 10 request/second, dipanggil command berikut.
-```
-ab -n 200 -c 10 -g eisen.data http://granz.channel.e18.com/
-```
-Dicatat request per seconds nya, kemudian disesuaikan lagi algoritma load balancing pada Eisen dengan menyesuaikan konfigurasi nginx nya dan dicatat hasil benchmarkingnya. Untuk weighted round robin menjadi seperti berikut.
-```
-...
-upstream backend  {
-    server 192.215.4.4 weight=4; #IP Lawine
-    server 192.215.4.3 weight=2; #IP Linie
-    server 192.215.4.2 weight=1; #IP Lugner
-}
-...
-```
-Menggunakan least connection menjadi seperti berikut.
-```
-...
+# load balance least connection
+echo '#Default menggunakan Round Robin
 upstream backend  {
     least_conn;
     server 192.215.4.4; #IP Lawine
     server 192.215.4.3; #IP Linie
     server 192.215.4.2; #IP Lugner
 }
-...
-```
-Kemudian menggunakan IP Hash,
-```
-...
-upstream backend  {
-    ip_hash;
-    server 192.215.4.4; #IP Lawine
-    server 192.215.4.3; #IP Linie
-    server 192.215.4.2; #IP Lugner
+
+server {
+    listen 80;
+    server_name granz.channel.e18.com;
+
+            location / {
+                    proxy_pass http://backend;
+                    proxy_set_header    X-Real-IP $remote_addr;
+                    proxy_set_header    X-Forwarded-For $proxy_add_x_forwarded_for;
+                    proxy_set_header    Host $http_host;
+            }
+
+    error_log /var/log/nginx/lb_error.log;
+    access_log /var/log/nginx/lb_access.log;
+
 }
-...
-```
-Dan menggunakan generic hash.
-```
-...
-upstream backend  {
-    hash $request_uri consistent;
-    server 192.215.4.4; #IP Lawine
-    server 192.215.4.3; #IP Linie
-    server 192.215.4.2; #IP Lugner
-}
-...
-```
-## Soal 9
-Pada LB Eisen, disesuaikan konfigurasi nginx-nya.
-```
+' > /etc/nginx/sites-available/default
+
+service nginx restart
+
+# load balance ip hash
 echo '#Default menggunakan Round Robin
 upstream backend  {
+    ip_hash;
     server 192.215.4.4; #IP Lawine
     server 192.215.4.3; #IP Linie
     server 192.215.4.2; #IP Lugner
@@ -261,31 +205,39 @@ server {
 ' > /etc/nginx/sites-available/default
 
 service nginx restart
-```
-Tanpa mematikan service nginx di tiga worker, pada client, dipanggil command :
-```
-ab -n 100 -c 10 -g eisen.data http://granz.channel.e18.com/
-```
-Dicatat hasilnya, kemudian untuk menguji dengan dua worker, matikan service nginx pada salah satu worker dengan command berikut :
-```
-service nginx stop
-```
-Lalu dilakukan benchmarking lagi pada client :
-```
-ab -n 100 -c 10 -g eisen.data http://granz.channel.e18.com/
-```
-Lalu dimatikan satu lagi worker dan dilakukan benchmarking lagi di client dan dicatat hasil benchmarkingnya.
-## Soal 10
-Pada Eisen, dibuat direktori rahasisakita
-```
+
+# load balance generic hash
+echo '#Default menggunakan Round Robin
+upstream backend  {
+    hash $request_uri consistent;
+    server 192.215.4.4; #IP Lawine
+    server 192.215.4.3; #IP Linie
+    server 192.215.4.2; #IP Lugner
+}
+
+server {
+    listen 80;
+    server_name granz.channel.e18.com;
+
+            location / {
+                    proxy_pass http://backend;
+                    proxy_set_header    X-Real-IP $remote_addr;
+                    proxy_set_header    X-Forwarded-For $proxy_add_x_forwarded_for;
+                    proxy_set_header    Host $http_host;
+            }
+
+    error_log /var/log/nginx/lb_error.log;
+    access_log /var/log/nginx/lb_access.log;
+
+}
+' > /etc/nginx/sites-available/default
+
+service nginx restart
+
+# authorize (will invoke prompt)
 mkdir /etc/nginx/rahasisakita/
-```
-Kemudian, buat password untuk user baru :
-```
 htpasswd -c /etc/nginx/rahasisakita/.htpasswd netics
-```
-Command tersebut akan memicu prompt, dimana kita akan memasukkan password untuk netics yaitu "ajke18". Konfigurasikan server nginx-nya.
-```
+
 echo '#Default menggunakan Round Robin
 upstream backend  {
     server 192.215.4.4; #IP Lawine
@@ -318,10 +270,8 @@ server {
 ' > /etc/nginx/sites-available/default
 
 service nginx restart
-```
-## Soal 11
-Pada LB Eisen, dikonfigurasikan lagi nginx-nya.
-```
+
+# proxy pass
 echo '#Default menggunakan Round Robin
 upstream backend  {
     server 192.215.4.4; #IP Lawine
@@ -359,75 +309,215 @@ server {
 ' > /etc/nginx/sites-available/default
 
 service nginx restart
-```
-Pada konfigurasi di atas, dispesifikasikan proxy pass untuk menuju website ITS, yaitu pada bagian :
-```
-location /its {
-        proxy_pass https://www.its.ac.id;
-        proxy_set_header X-Forwarded-Proto $scheme;
-}
-```
-## Soal 12
-Dikonfigurasikan LB Eisen sebagai berikut :
-```
+
+# Selanjutnya LB ini hanya boleh 
+# diakses oleh client dengan IP [Prefix IP].3.69, [Prefix IP].3.70, [Prefix IP].4.167, 
+# dan [Prefix IP].4.168. (12) hint: (fixed in dulu clinetnya)
+# (NEED TO TEST)
+# echo '#Default menggunakan Round Robin
+# upstream backend  {
+#     server 192.215.4.4; #IP Lawine
+#     server 192.215.4.3; #IP Linie
+#     server 192.215.4.2; #IP Lugner
+# }
+
+# server {
+#     listen 80;
+#     server_name granz.channel.e18.com;
+
+#     allow 192.215.3.69;
+#     allow 192.215.3.70;
+#     allow 192.215.4.167;
+#     allow 192.215.4.168;
+#     deny all;
+
+#             location / {
+#                     proxy_pass http://backend;
+#                     proxy_set_header    X-Real-IP $remote_addr;
+#                     proxy_set_header    X-Forwarded-For $proxy_add_x_forwarded_for;
+#                     proxy_set_header    Host $http_host;
+
+#                     auth_basic "Administrator'\''s Area";
+#                     auth_basic_user_file /etc/nginx/rahasisakita/.htpasswd;
+#             }
+
+#             location ~ /\.ht {
+#                 deny all;
+#             }
+
+#             location /its {
+#                     proxy_pass https://www.its.ac.id;
+#                     proxy_set_header X-Forwarded-Proto $scheme;
+#             }
+
+#     error_log /var/log/nginx/lb_error.log;
+#     access_log /var/log/nginx/lb_access.log;
+
+# }
+# ' > /etc/nginx/sites-available/default
+
+# service nginx restart
+
+# setup riegel canyon
+echo 'zone "granz.channel.e18.com" {
+        type master;
+        file "/etc/bind/jarkom/granz.channel.e18.com";
+};
+
+zone "3.215.192.in-addr.arpa" {
+    type master;
+    file "/etc/bind/jarkom/3.215.192.in-addr.arpa";
+};
+
+zone "riegel.canyon.e18.com" {
+        type master;
+        file "/etc/bind/jarkom/riegel.canyon.e18.com";
+};
+' > /etc/bind/named.conf.local
+
+echo ';
+; BIND data file for local loopback interface
+;
+$TTL    604800
+@       IN      SOA     riegel.canyon.e18.com. root.riegel.canyon.e18.com. (
+                        2023110101    ; Serial
+                        604800        ; Refresh
+                        86400         ; Retry
+                        2419200       ; Expire
+                        604800 )      ; Negative Cache TTL
+;
+@               IN      NS      riegel.canyon.e18.com.
+@               IN      A       192.215.3.3 ; IP Eisen
+www             IN      CNAME   riegel.canyon.e18.com.
+frieren         IN      A       192.215.1.4 ; IP Frieren
+flamme          IN      A       192.215.1.5 ; IP Flamme
+fern            IN      A       192.215.1.6 ; IP Fern
+' > /etc/bind/jarkom/riegel.canyon.e18.com
+
+# echo '
+# ; BIND data file for local loopback interface
+# ;
+# $TTL    604800
+# @       IN      SOA     riegel.canyon.e18.com. root.riegel.canyon.e18.com. (
+#                         2023110101    ; Serial
+#                         604800        ; Refresh
+#                         86400         ; Retry
+#                         2419200       ; Expire
+#                         604800 )      ; Negative Cache TTL
+# ;
+# 3.215.192.in-addr.arpa.         IN      NS      riegel.canyon.e18.com.
+# 3                               IN      PTR     riegel.canyon.e18.com.
+# ' > /etc/bind/jarkom/3.215.192.in-addr.arpa
+
+service bind9 restart
+
+# setup riegel canyon nginx
 echo '#Default menggunakan Round Robin
-upstream backend  {
-    server 192.215.4.4; #IP Lawine
-    server 192.215.4.3; #IP Linie
-    server 192.215.4.2; #IP Lugner
+upstream backend_riegel {
+    server 192.215.1.4; #IP Frieren
+    server 192.215.1.5; #IP Flamme
+    server 192.215.1.6; #IP Fern
 }
 
 server {
     listen 80;
-    server_name granz.channel.e18.com;
-
-    allow 192.215.3.69;
-    allow 192.215.3.70;
-    allow 192.215.4.167;
-    allow 192.215.4.168;
-    deny all;
+    server_name riegel.canyon.e18.com;
 
             location / {
-                    proxy_pass http://backend;
+                    proxy_pass http://backend_riegel;
                     proxy_set_header    X-Real-IP $remote_addr;
                     proxy_set_header    X-Forwarded-For $proxy_add_x_forwarded_for;
                     proxy_set_header    Host $http_host;
-
-                    auth_basic "Administrator'\''s Area";
-                    auth_basic_user_file /etc/nginx/rahasisakita/.htpasswd;
-            }
-
-            location ~ /\.ht {
-                deny all;
-            }
-
-            location /its {
-                    proxy_pass https://www.its.ac.id;
-                    proxy_set_header X-Forwarded-Proto $scheme;
             }
 
     error_log /var/log/nginx/lb_error.log;
     access_log /var/log/nginx/lb_access.log;
-
 }
-' > /etc/nginx/sites-available/default
+' > /etc/nginx/sites-available/riegel.canyon.e18.com
+
+ln -s /etc/nginx/sites-available/riegel.canyon.e18.com /etc/nginx/sites-enabled/
 
 service nginx restart
-```
-Pada konfigurasi di atas, hanya memperbolehkan akses dari IP tertentu, yaitu di bagian :
-```
-allow 192.215.3.69;
-allow 192.215.3.70;
-allow 192.215.4.167;
-allow 192.215.4.168;
-deny all;
-```
-## Soal 13
 
-## Soal 14
-## Soal 15
-## Soal 16
-## Soal 17
-## Soal 18
-## Soal 19
-## Soal 20
+# proxy bind
+echo '#Default menggunakan Round Robin
+upstream backend_riegel {
+    server 192.215.1.4; #IP Frieren
+    server 192.215.1.5; #IP Flamme
+    server 192.215.1.6; #IP Fern
+}
+
+server {
+    listen 80;
+    server_name riegel.canyon.e18.com;
+
+            location / {
+                    proxy_pass http://backend_riegel;
+                    proxy_set_header    X-Real-IP $remote_addr;
+                    proxy_set_header    X-Forwarded-For $proxy_add_x_forwarded_for;
+                    proxy_set_header    Host $http_host;
+            }
+
+            location /frieren {
+                proxy_bind 192.215.1.4;
+                proxy_pass http://backend_riegel;
+            }
+
+            location /flamme {
+                proxy_bind 192.215.1.5;
+                proxy_pass http://backend_riegel;
+            }
+
+            location /fern {
+                proxy_bind 192.215.1.6;
+                proxy_pass http://backend_riegel;
+            }
+
+    error_log /var/log/nginx/lb_error.log;
+    access_log /var/log/nginx/lb_access.log;
+}
+' > /etc/nginx/sites-available/riegel.canyon.e18.com
+
+service nginx restart
+
+# use least_con
+echo '#Default menggunakan Round Robin
+upstream backend_riegel {
+    least_conn;
+    server 192.215.1.4; #IP Frieren
+    server 192.215.1.5; #IP Flamme
+    server 192.215.1.6; #IP Fern
+}
+
+server {
+    listen 80;
+    server_name riegel.canyon.e18.com;
+
+            location / {
+                    proxy_pass http://backend_riegel;
+                    proxy_set_header    X-Real-IP $remote_addr;
+                    proxy_set_header    X-Forwarded-For $proxy_add_x_forwarded_for;
+                    proxy_set_header    Host $http_host;
+            }
+
+            location /frieren {
+                proxy_bind 192.215.1.4;
+                proxy_pass http://backend_riegel;
+            }
+
+            location /flamme {
+                proxy_bind 192.215.1.5;
+                proxy_pass http://backend_riegel;
+            }
+
+            location /fern {
+                proxy_bind 192.215.1.6;
+                proxy_pass http://backend_riegel;
+            }
+
+    error_log /var/log/nginx/lb_error.log;
+    access_log /var/log/nginx/lb_access.log;
+}
+' > /etc/nginx/sites-available/riegel.canyon.e18.com
+
+service nginx restart
