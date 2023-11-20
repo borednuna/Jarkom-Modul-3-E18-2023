@@ -6,7 +6,20 @@ Anggota Kelompok ''E18''
 | Hanun Shaka Puspa         | 5025211051 |
 | Cholid Junoto             | 5025201038 |
 
+Pada praktikum modul 3 kita menggunakan topologi sebagai berikut:
+
 ## Soal 1
+Kita diminta untuk melakukan konfigurasi sesuai dengan peta di atas, kemudian semua client harus menggunakan konfigurasi dari DHCP Server.
+
+## Penyelesaian
+Kita harus melakukan penginstallan pada masing masing kebutuhan node yang ditaruh langsung pada file ```/root/ .bashrc``` dengan format sebagai berikut:
+```
+#AURA
+echo nameserver 192.168.122.1 > /etc/resolv.conf
+iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE -s 192.215.0.0/16
+apt-get update
+echo "" | apt-get install isc-dhcp-relay -y
+```
 ## Soal 2
 ## Soal 3
 ## Soal 4
