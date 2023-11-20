@@ -1,7 +1,7 @@
 #NOMOR1
 #install dhcp-relay di route pada bashrc
-iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE -s 10.8.0.0/16
-cat /etc/resolv.conf
+echo nameserver 192.168.122.1 > /etc/resolv.conf
+iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE -s 192.215.0.0/16
 apt-get update
 echo "" | apt-get install isc-dhcp-relay -y
 
